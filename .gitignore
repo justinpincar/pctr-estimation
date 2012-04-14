@@ -5,6 +5,9 @@ training.txt.*
 descriptionid_tokensid.txt
 purchasedkeywordid_tokensid.txt
 queryid_tokensid.txt
+queryid_tokensid.txt.*
+submission.txt
+submission.txt.*
 titleid_tokensid.txt
 userid_profile.txt
 
