@@ -1,0 +1,66 @@
+total_clicks = 0
+total_impressions = 0
+
+ads = {}
+
+training_file = File.new("training.txt", "r")
+while (line = training_file.gets)
+  elements = line.split("\t")
+
+  clicks = elements[0].to_i
+  impressions = elements[1].to_i
+  display_url = elements[2]
+  ad_id = elements[3]
+  advertiser_id = elements[4]
+  depth = elements[5]
+  position = elements[6]
+  query_id = elements[7]
+  keyword_id = elements[8]
+  title_id = elements[9]
+  description_id = elements[10]
+  user_id = elements[11]
+
+  ad = ads[ad_id]
+  if ad.nil?
+    ad = {}
+    ad['clicks'] = clicks
+    ad['impressions'] = impressions
+    ads[ad_id] = ad
+  else
+    ad['clicks'] += clicks
+    ad['impressions'] += impressions
+  end
+
+  total_clicks += clicks
+  total_impressions += impressions
+end
+training_file.close
+
+mean_ctr = total_clicks/total_impressions.to_f
+
+submission_file = File.new("submission.txt.1", "w")
+test_file = File.new("test.txt", "r")
+while (line = test_file.gets)
+  display_url = elements[0]
+  ad_id = elements[1]
+  advertiser_id = elements[2]
+  depth = elements[3]
+  position = elements[4]
+  query_id = elements[5]
+  keyword_id = elements[6]
+  title_id = elements[7]
+  description_id = elements[8]
+  user_id = elements[9]
+
+  ad = ads[ad_id]
+  if ad.nil?
+    pctr = mean_ctr
+  else
+    pctr = ad['clicks']/ad['impressions'].to_f
+  end
+  
+  submission_file.puts(pctr)
+end
+test_file.close
+submission_file.close
+
