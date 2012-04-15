@@ -19,33 +19,25 @@ def gc()
 end
 
 def init_keywords
-  log("Reading keywords...")
-  keywords_lines = IO.readlines("purchasedkeywordid_tokensid.txt")
-  log("OK")
-
   log("Loading keywords...")
-  keywords_lines.each do |line|
+  keywords_file = File.new("purchasedkeywordid_tokensid.txt", "r")
+  while (line = keywords_file.gets)
     elements = line.split("\t")
 
     keyword_id = elements[0]
-    keyword_tokens = elements[1].split("|")
-    @keywords[keyword_id] = keyword_tokens
+    @keywords[keyword_id] = elements[1]
   end
   log("OK")
 end
 
 def init_queries
-  log("Reading queries...")
-  queries_lines = IO.readlines("queryid_tokensid.txt.10000")
-  log("OK")
-
   log("Loading queries...")
-  queries_lines.each do |line|
+  queries_file = File.new("queryid_tokensid.txt.10000", "r")
+  while (line = queries_file.gets)
     elements = line.split("\t")
 
     query_id = elements[0]
-    query_tokens = elements[1].split("|")
-    @queries[query_id] = query_tokens
+    @queries[query_id] = elements[1]
   end
   log("OK")
 end
@@ -59,7 +51,8 @@ def init_training_data
   total_impressions = 0
 
   log("Loading training data...")
-  training_lines.each do |line|
+  training_file = File.new("training.txt.10000", "r")
+  while (line = training_file.gets)
     elements = line.split("\t")
 
     clicks = elements[0].to_i
@@ -119,7 +112,8 @@ def init_training_data
   keyword_match_vals = []
 
   log("Building regression vectors...")
-  training_lines.each do |line|
+  training_file = File.new("training.txt.10000", "r")
+  while (line = training_file.gets)
     elements = line.split("\t")
 
     clicks = elements[0].to_i
@@ -145,8 +139,10 @@ def init_training_data
     advertiser_pctr = advertiser['pctr'] || @mean_ctr
     advertiser_pctrs.push(advertiser_pctr)
 
-    keyword_tokens = @keywords[keyword_id] || []
-    query_tokens = @queries[query_id] || []
+    keyword_line = @keywords[keyword_id] || ""
+    keyword_tokens = keyword_line.split("|")
+    query_line = @queries[query_id] || ""
+    query_tokens = query_line.split("|")
     keyword_matches = (keyword_tokens & query_tokens).length
     keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     keyword_match_vals.push(keyword_match_val)
@@ -171,13 +167,10 @@ def init_training_data
 end
 
 def calculate_test_output
-  log("Reading test data...")
-  test_lines = IO.readlines("test.txt.10000")
-  log("OK")
-
   submission_file = File.new("submission.txt.10000", "w")
   log("Calculating pctrs...")
-  test_lines.each do |line|
+  test_file = File.new("test.txt.10000", "r")
+  while (line = test_file.gets)
     elements = line.split("\t")
 
     display_url = elements[0]
@@ -199,8 +192,10 @@ def calculate_test_output
     advertiser_pctr = advertiser['pctr'] || @mean_ctr
     # log("Advertiser pctr: #{advertiser_pctr}")
 
-    keyword_tokens = @keywords[keyword_id] || []
-    query_tokens = @queries[query_id] || []
+    keyword_line = @keywords[keyword_id] || ""
+    keyword_tokens = keyword_line.split("|")
+    query_line = @queries[query_id] || ""
+    query_tokens = query_line.split("|")
     keyword_matches = (keyword_tokens & query_tokens).length
     keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     # log("Keyword match val: #{keyword_match_val}")
