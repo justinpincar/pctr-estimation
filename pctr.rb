@@ -1,5 +1,8 @@
 require 'statsample'
 
+# Average lengths calculated off of first 10,000 rows in training.txt
+KEYWORDS_AVG_LENGTH = 3 #3.220632348763987
+
 @ads = {}
 @advertisers = {}
 @keywords = {}
@@ -145,7 +148,7 @@ def init_training_data
     keyword_tokens = @keywords[keyword_id] || []
     query_tokens = @queries[query_id] || []
     keyword_matches = (keyword_tokens & query_tokens).length
-    keyword_match_val = keyword_matches / [keyword_tokens.length, 3].min.to_f
+    keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     keyword_match_vals.push(keyword_match_val)
   end
   log("OK")
@@ -199,7 +202,7 @@ def calculate_test_output
     keyword_tokens = @keywords[keyword_id] || []
     query_tokens = @queries[query_id] || []
     keyword_matches = (keyword_tokens & query_tokens).length
-    keyword_match_val = keyword_matches / [keyword_tokens.length, 3].min.to_f
+    keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     # log("Keyword match val: #{keyword_match_val}")
 
     pctr = @constant + (@ad_pctr_coef * ad_pctr) + (@advertiser_pctr_coef * advertiser_pctr) + (@keyword_match_val_coef * keyword_match_val)
@@ -217,4 +220,10 @@ gc()
 init_training_data()
 gc()
 calculate_test_output()
+
+# Thoughts:
+# pctr = {ad_pctr | content_pctr | user_pctr}
+# ad_pctr = ad_ctr || advertiser_ctr || ?similar_ads_ctr || mean_ctr
+# content_pctr = {keyword_match_val | description_match_val | title_match_val}
+# user_pctr = ?
 
