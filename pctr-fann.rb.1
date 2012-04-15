@@ -1,0 +1,203 @@
+require 'statsample'
+require "ai4r"
+
+# Average lengths calculated off of first 10,000 rows in training.txt
+KEYWORDS_AVG_LENGTH = 3 #3.220632348763987
+KEYWORDS_AVG_MATCH_VAL = 0.2538000000000004
+
+@net = Ai4r::NeuralNetwork::Backpropagation.new([2, 2, 2, 1])
+
+@ads = {}
+@advertisers = {}
+@keywords = {}
+@queries = {}
+
+def log(msg)
+  warn("#{Time.now}: #{msg}")
+end
+
+def gc()
+  log("Garbage collecting...")
+  GC.start()
+  log("OK")
+end
+
+def init_keywords
+  log("Loading keywords...")
+  keywords_file = File.new("purchasedkeywordid_tokensid.txt", "r")
+  while (line = keywords_file.gets)
+    elements = line.split("\t")
+
+    keyword_id = elements[0]
+    @keywords[keyword_id] = elements[1]
+  end
+  log("OK")
+end
+
+def init_queries
+  log("Loading queries...")
+  queries_file = File.new("queryid_tokensid.txt", "r")
+  while (line = queries_file.gets)
+    elements = line.split("\t")
+
+    query_id = elements[0]
+    @queries[query_id] = elements[1]
+  end
+  log("OK")
+end
+
+def init_training_data
+  total_clicks = 0
+  total_impressions = 0
+
+  log("Loading training data...")
+  training_file = File.new("training.txt", "r")
+  while (line = training_file.gets)
+    elements = line.split("\t")
+
+    clicks = elements[0].to_i
+    impressions = elements[1].to_i
+    ad_id = elements[3]
+    advertiser_id = elements[4]
+    query_id = elements[7]
+    keyword_id = elements[8]
+
+    ad = @ads[ad_id]
+    if ad.nil?
+      ad = {}
+      ad['clicks'] = clicks
+      ad['impressions'] = impressions
+      @ads[ad_id] = ad
+    else
+      ad['clicks'] += clicks
+      ad['impressions'] += impressions
+    end
+
+    advertiser = @advertisers[advertiser_id]
+    if advertiser.nil?
+      advertiser = {}
+      advertiser['clicks'] = clicks
+      advertiser['impressions'] = impressions
+      @advertisers[advertiser_id] = advertiser
+    else
+      advertiser['clicks'] += clicks
+      advertiser['impressions'] += impressions
+    end
+
+    total_clicks += clicks
+    total_impressions += impressions
+  end
+  log("OK")
+
+  @mean_ctr = total_clicks/total_impressions.to_f
+
+  @ads.each_pair do |ad_id, ad|
+    ad['pctr'] = ad['clicks']/ad['impressions'].to_f
+  end
+
+  @advertisers.each_pair do |advertiser_id, advertiser|
+    advertiser['pctr'] = advertiser['clicks']/advertiser['impressions'].to_f
+  end
+
+  outputs = []
+  inputs = []
+
+  log("Building regression vectors...")
+  training_file = File.new("training.txt", "r")
+
+  while (line = training_file.gets)
+    elements = line.split("\t")
+
+    clicks = elements[0].to_i
+    impressions = elements[1].to_i
+    ad_id = elements[3]
+    advertiser_id = elements[4]
+    query_id = elements[7]
+    keyword_id = elements[8]
+
+    observed_ctr = clicks / impressions.to_f
+
+    advertiser = @advertisers[advertiser_id]
+    advertiser_pctr = advertiser['pctr'] || @mean_ctr
+
+    ad = @ads[ad_id]
+    ad_pctr = ad['pctr'] || advertiser_pctr
+
+    keyword_line = @keywords[keyword_id] || ""
+    keyword_tokens = keyword_line.split("|")
+    query_line = @queries[query_id]
+    if query_line.nil?
+      keyword_match_val = KEYWORDS_AVG_MATCH_VAL
+    else
+      query_tokens = query_line.split("|")
+      keyword_matches = (keyword_tokens & query_tokens).length
+      keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
+    end
+
+    input = [ad_pctr, keyword_match_val]
+    output = [observed_ctr]
+    @net.train(input, output)
+  end
+  log("OK")
+end
+
+def calculate_test_output
+  submission_file = File.new("submission.txt.fann.1", "w")
+  log("Calculating pctrs...")
+  test_file = File.new("test.txt", "r")
+  while (line = test_file.gets)
+    elements = line.split("\t")
+
+    display_url = elements[0]
+    ad_id = elements[1]
+    advertiser_id = elements[2]
+    depth = elements[3]
+    position = elements[4]
+    query_id = elements[5]
+    keyword_id = elements[6]
+    title_id = elements[7]
+    description_id = elements[8]
+    user_id = elements[9]
+
+    advertiser = @advertisers[advertiser_id] || {}
+    advertiser_pctr = advertiser['pctr'] || @mean_ctr
+    # log("Advertiser pctr: #{advertiser_pctr}")
+
+    ad = @ads[ad_id] || {}
+    ad_pctr = ad['pctr'] || advertiser_pctr
+    # log("Ad pctr: #{ad_pctr}")
+
+    keyword_line = @keywords[keyword_id] || ""
+    keyword_tokens = keyword_line.split("|")
+    query_line = @queries[query_id]
+    if query_line.nil?
+      keyword_match_val = KEYWORDS_AVG_MATCH_VAL
+    else
+      query_tokens = query_line.split("|")
+      keyword_matches = (keyword_tokens & query_tokens).length
+      keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
+    end
+    # log("Keyword match val: #{keyword_match_val}")
+
+    pctr = @net.eval([ad_pctr, keyword_match_val])
+    # log("Pctr: #{pctr}")
+    submission_file.puts(pctr)
+  end
+  submission_file.close
+  log("OK")
+end
+
+init_keywords()
+gc()
+init_queries()
+gc()
+init_training_data()
+gc()
+calculate_test_output()
+
+# Thoughts:
+# pctr = {ad_pctr | content_pctr | user_pctr}
+# ad_pctr = ad_ctr || advertiser_ctr || ?similar_ads_ctr || mean_ctr
+# content_pctr = {keyword_match_val | description_match_val | title_match_val}
+# user_pctr = ?
+
