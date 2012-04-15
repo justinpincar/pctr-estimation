@@ -35,7 +35,7 @@ keywords_lines = nil
 gc()
 
 log("Reading queries...")
-queries_lines = IO.readlines("queryid_tokensid.txt.10000")
+queries_lines = IO.readlines("queryid_tokensid.txt")
 log("OK")
 
 log("Loading queries...")
@@ -51,7 +51,7 @@ queries_lines = nil
 gc()
 
 log("Reading training data...")
-training_lines = IO.readlines("training.txt.10000")
+training_lines = IO.readlines("training.txt")
 log("OK")
 
 log("Loading training data...")
@@ -178,10 +178,10 @@ gc()
 # log("keyword_match_val_coef: #{keyword_match_val_coef}")
 
 log("Reading test data...")
-test_lines = IO.readlines("test.txt.10000")
+test_lines = IO.readlines("test.txt")
 log("OK")
 
-submission_file = File.new("submission.txt.10000", "w")
+submission_file = File.new("submission.txt.4", "w")
 log("Calculating pctrs...")
 test_lines.each do |line|
   elements = line.split("\t")
