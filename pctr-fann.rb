@@ -1,4 +1,3 @@
-require 'statsample'
 require "ai4r"
 
 REPORT_INTERVAL = ARGV[0].to_i
@@ -45,7 +44,7 @@ def init_ads
 end
 
 def init_advertisers
-  log("Loading advertiserss...")
+  log("Loading advertisers...")
   advertisers_file = File.new("_advertisers.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
   line_number = 0
   while (line = advertisers_file.gets)
