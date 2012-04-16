@@ -104,6 +104,9 @@ def write_training_data
   training_file = File.new("training.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
   training_data_file = File.new("_training.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "w")
   line_number = 0
+  keywords_match_count = 0
+  keyword_total_matches = 0
+  keyword_lengths = 0
   while (line = training_file.gets)
     line.chomp!
     elements = line.split("\t")
@@ -128,14 +131,18 @@ def write_training_data
       query_tokens = query_line.split("|")
       keyword_matches = (keyword_tokens & query_tokens).length
       keyword_match_val = keyword_matches == 0 ? 0.to_f : keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
+      keyword_total_matches += keyword_matches
+      keywords_match_count += 1
+      keyword_lengths += keyword_tokens.length
     end
 
-    if keyword_match_val.nan?
-      log("query_tokens: #{query_tokens}")
-      log("keyword_tokens: #{keyword_tokens}")
-      log("keyword_matches: #{keyword_matches}")
-      log("keyword_match_val: #{keyword_match_val}")
-    end
+
+    #if keyword_match_val.nan?
+    #  log("query_tokens: #{query_tokens}")
+    #  log("keyword_tokens: #{keyword_tokens}")
+    #  log("keyword_matches: #{keyword_matches}")
+    #  log("keyword_match_val: #{keyword_match_val}")
+    #end
 
     #log("Observed ctr: #{observed_ctr}")
     #log("Ad pctr: #{ad_pctr}")
@@ -148,6 +155,8 @@ def write_training_data
       log("Processed #{line_number} lines...")
     end
   end
+  log("Average keyword_matches: #{keyword_total_matches / keywords_match_count.to_f}")
+  log("Average keywords_length: #{keyword_lengths / keywords_match_count.to_f}")
   training_file.close
   training_data_file.close
   log("OK")
