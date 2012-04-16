@@ -1,9 +1,12 @@
+*.log
+_*.*
 test.txt
 test.txt.*
 training.txt
 training.txt.*
 descriptionid_tokensid.txt
 purchasedkeywordid_tokensid.txt
+purchasedkeywordid_tokensid.txt.*
 queryid_tokensid.txt
 queryid_tokensid.txt.*
 submission.txt
