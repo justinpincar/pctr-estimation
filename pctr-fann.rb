@@ -1,11 +1,15 @@
 require 'statsample'
 require "ai4r"
 
-# Average lengths calculated off of first 10,000 rows in training.txt
+REPORT_INTERVAL = ARGV[0].to_i
+RUN_LENGTH = ARGV[1].nil? ? nil : ARGV[1].to_i
+
+# Calculated from the entire training data set
+MEAN_CTR = 0.03488213165100169
+
+# Averages calculated off of first 10,000 rows in training.txt
 KEYWORDS_AVG_LENGTH = 3 #3.220632348763987
 KEYWORDS_AVG_MATCH_VAL = 0.2538000000000004
-
-@net = Ai4r::NeuralNetwork::Backpropagation.new([2, 2, 2, 1])
 
 @ads = {}
 @advertisers = {}
@@ -22,90 +26,87 @@ def gc()
   log("OK")
 end
 
+def init_ads
+  log("Loading ads...")
+  ads_file = File.new("_ads.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  line_number = 0
+  while (line = ads_file.gets)
+    line.chomp!
+    elements = line.split("\t")
+
+    @ads[elements[0]] = elements[1].to_f
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
+  end
+  log("OK")
+end
+
+def init_advertisers
+  log("Loading advertiserss...")
+  advertisers_file = File.new("_advertisers.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  line_number = 0
+  while (line = advertisers_file.gets)
+    line.chomp!
+    elements = line.split("\t")
+
+    @advertisers[elements[0]] = elements[1].to_f
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
+  end
+  log("OK")
+end
+
 def init_keywords
   log("Loading keywords...")
-  keywords_file = File.new("purchasedkeywordid_tokensid.txt", "r")
+  keywords_file = File.new("purchasedkeywordid_tokensid.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  line_number = 0
   while (line = keywords_file.gets)
+    line.chomp!
     elements = line.split("\t")
 
     keyword_id = elements[0]
     @keywords[keyword_id] = elements[1]
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
   end
   log("OK")
 end
 
 def init_queries
   log("Loading queries...")
-  queries_file = File.new("queryid_tokensid.txt.10000", "r")
+  queries_file = File.new("queryid_tokensid.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  line_number = 0
   while (line = queries_file.gets)
+    line.chomp!
     elements = line.split("\t")
 
     query_id = elements[0]
     @queries[query_id] = elements[1]
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
   end
   log("OK")
 end
 
-def init_training_data
-  total_clicks = 0
-  total_impressions = 0
-
-  log("Loading training data...")
-  training_file = File.new("training.txt.10000", "r")
+def write_training_data
+  log("Writing training data...")
+  training_file = File.new("training.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  training_data_file = File.new("_training.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "w")
+  line_number = 0
   while (line = training_file.gets)
-    elements = line.split("\t")
-
-    clicks = elements[0].to_i
-    impressions = elements[1].to_i
-    ad_id = elements[3]
-    advertiser_id = elements[4]
-    query_id = elements[7]
-    keyword_id = elements[8]
-
-    ad = @ads[ad_id]
-    if ad.nil?
-      ad = {}
-      ad['clicks'] = clicks
-      ad['impressions'] = impressions
-      @ads[ad_id] = ad
-    else
-      ad['clicks'] += clicks
-      ad['impressions'] += impressions
-    end
-
-    advertiser = @advertisers[advertiser_id]
-    if advertiser.nil?
-      advertiser = {}
-      advertiser['clicks'] = clicks
-      advertiser['impressions'] = impressions
-      @advertisers[advertiser_id] = advertiser
-    else
-      advertiser['clicks'] += clicks
-      advertiser['impressions'] += impressions
-    end
-
-    total_clicks += clicks
-    total_impressions += impressions
-  end
-  log("OK")
-
-  @mean_ctr = total_clicks/total_impressions.to_f
-
-  @ads.each_pair do |ad_id, ad|
-    ad['pctr'] = ad['clicks']/ad['impressions'].to_f
-  end
-
-  @advertisers.each_pair do |advertiser_id, advertiser|
-    advertiser['pctr'] = advertiser['clicks']/advertiser['impressions'].to_f
-  end
-
-  outputs = []
-  inputs = []
-
-  log("Building regression vectors...")
-  training_file = File.new("training.txt.10000", "r")
-
-  while (line = training_file.gets)
+    line.chomp!
     elements = line.split("\t")
 
     clicks = elements[0].to_i
@@ -117,11 +118,7 @@ def init_training_data
 
     observed_ctr = clicks / impressions.to_f
 
-    advertiser = @advertisers[advertiser_id]
-    advertiser_pctr = advertiser['pctr'] || @mean_ctr
-
-    ad = @ads[ad_id]
-    ad_pctr = ad['pctr'] || advertiser_pctr
+    ad_pctr = @ads[ad_id] || @advertisers[advertiser_id] || MEAN_CTR
 
     keyword_line = @keywords[keyword_id] || ""
     keyword_tokens = keyword_line.split("|")
@@ -131,41 +128,47 @@ def init_training_data
     else
       query_tokens = query_line.split("|")
       keyword_matches = (keyword_tokens & query_tokens).length
-      keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
+      keyword_match_val = keyword_matches == 0 ? 0.to_f : keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     end
 
-    input = [ad_pctr, keyword_match_val]
-    output = [observed_ctr]
-    @net.train(input, output)
+    if keyword_match_val.nan?
+      log("query_tokens: #{query_tokens}")
+      log("keyword_tokens: #{keyword_tokens}")
+      log("keyword_matches: #{keyword_matches}")
+      log("keyword_match_val: #{keyword_match_val}")
+    end
+
+    #log("Observed ctr: #{observed_ctr}")
+    #log("Ad pctr: #{ad_pctr}")
+    #log("Keyword_match_val: #{keyword_match_val}")
+
+    training_data_file.puts("#{observed_ctr}\t#{ad_pctr}\t#{keyword_match_val}")
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
   end
+  training_file.close
+  training_data_file.close
   log("OK")
 end
 
-def calculate_test_output
-  submission_file = File.new("submission.txt.10000", "w")
+def write_test_data
   log("Calculating pctrs...")
-  test_file = File.new("test.txt.10000", "r")
+  test_file = File.new("test.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
+  test_data_file = File.new("_test.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "w")
+  line_number = 0
   while (line = test_file.gets)
+    line.chomp!
     elements = line.split("\t")
 
-    display_url = elements[0]
     ad_id = elements[1]
     advertiser_id = elements[2]
-    depth = elements[3]
-    position = elements[4]
     query_id = elements[5]
     keyword_id = elements[6]
-    title_id = elements[7]
-    description_id = elements[8]
-    user_id = elements[9]
 
-    advertiser = @advertisers[advertiser_id] || {}
-    advertiser_pctr = advertiser['pctr'] || @mean_ctr
-    # log("Advertiser pctr: #{advertiser_pctr}")
-
-    ad = @ads[ad_id] || {}
-    ad_pctr = ad['pctr'] || advertiser_pctr
-    # log("Ad pctr: #{ad_pctr}")
+    ad_pctr = @ads[ad_id] || @advertisers[advertiser_id] || MEAN_CTR
 
     keyword_line = @keywords[keyword_id] || ""
     keyword_tokens = keyword_line.split("|")
@@ -175,25 +178,32 @@ def calculate_test_output
     else
       query_tokens = query_line.split("|")
       keyword_matches = (keyword_tokens & query_tokens).length
-      keyword_match_val = keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
+      keyword_match_val = keyword_matches == 0 ? 0.to_f :  keyword_matches / [keyword_tokens.length, KEYWORDS_AVG_LENGTH].min.to_f
     end
-    # log("Keyword match val: #{keyword_match_val}")
 
-    pctr = @net.eval([ad_pctr, keyword_match_val])
-    # log("Pctr: #{pctr}")
-    submission_file.puts(pctr)
+    test_data_file.puts("#{ad_pctr}\t#{keyword_match_val}")
+
+    line_number += 1
+    if line_number % REPORT_INTERVAL == 0
+      log("Processed #{line_number} lines...")
+    end
   end
-  submission_file.close
+  test_file.close
+  test_data_file.close
   log("OK")
 end
 
+init_ads()
+gc()
+init_advertisers()
+gc()
 init_keywords()
 gc()
 init_queries()
 gc()
-init_training_data()
+write_training_data()
 gc()
-calculate_test_output()
+write_test_data()
 
 # Thoughts:
 # pctr = {ad_pctr | content_pctr | user_pctr}

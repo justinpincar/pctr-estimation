@@ -15,7 +15,7 @@ log("Loading training data...")
 training_file = File.new("training.txt#{RUN_LENGTH.nil? ? "" : ".#{RUN_LENGTH}"}", "r")
 line_number = 0
 while (line = training_file.gets)
-  line_number += 1
+  line.chomp!
   elements = line.split("\t")
 
   clicks = elements[0].to_i
@@ -48,6 +48,7 @@ while (line = training_file.gets)
   total_clicks += clicks
   total_impressions += impressions
 
+  line_number += 1
   if line_number % REPORT_INTERVAL == 0
     log("Processed #{line_number} lines...")
   end
